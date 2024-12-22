@@ -2,10 +2,20 @@ const messagesDiv = document.getElementById('messages');
 const userInput = document.getElementById('userInput');
 const sendButton = document.getElementById('sendButton');
 const modelSelector = document.getElementById('modelSelector');
+const serverUrlInput = document.getElementById('serverUrl');
+
+// Initialize server URL from localStorage or default
+serverUrlInput.value = localStorage.getItem('ollamaServerUrl') || 'http://localhost:11434';
+
+// Save server URL when changed
+serverUrlInput.addEventListener('change', () => {
+    localStorage.setItem('ollamaServerUrl', serverUrlInput.value);
+    loadModels(); // Reload models when server changes
+});
 
 async function loadModels() {
     try {
-        const response = await fetch('http://localhost:11434/api/tags', {
+        const response = await fetch(`${serverUrlInput.value}/api/tags`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
@@ -39,7 +49,7 @@ async function sendMessage() {
     userInput.value = '';
 
     try {
-        const response = await fetch('http://localhost:11434/api/generate', {
+        const response = await fetch(`${serverUrlInput.value}/api/generate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -73,7 +83,7 @@ async function sendMessage() {
         addMessage(botResponse, false);
     } catch (error) {
         console.error('Error:', error);
-        addMessage('Error: Could not connect to Ollama service', false);
+        addMessage(`Error: Could not connect to Ollama service at ${serverUrlInput.value}`, false);
     }
 }
 
