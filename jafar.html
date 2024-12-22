@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ollama Chat Interface</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    .chat-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .model-selector {
+      margin-bottom: 20px;
+      padding: 10px;
+      width: 100%;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+    .messages {
+      height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background-color: #fafafa;
+    }
+    .message {
+      margin: 5px 0;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    .message.user {
+      text-align: right;
+      color: blue;
+      background-color: #e3f2fd;
+    }
+    .message.bot {
+      text-align: left;
+      color: green;
+      background-color: #f1f8e9;
+    }
+    .input-container {
+      display: flex;
+      gap: 10px;
+    }
+    .input-container input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .input-container button {
+      padding: 10px;
+      background: blue;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .input-container button:hover {
+      background: darkblue;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <select id="modelSelector" class="model-selector">
+      <option value="">Loading models...</option>
+    </select>
+    <div class="messages" id="messages"></div>
+    <div class="input-container">
+      <input type="text" id="userInput" placeholder="Type your message here..." />
+      <button id="sendButton">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const messagesDiv = document.getElementById('messages');
+    const userInput = document.getElementById('userInput');
+    const sendButton = document.getElementById('sendButton');
+    const modelSelector = document.getElementById('modelSelector');
+
+    // Load available models
+    async function loadModels() {
+      try {
+        const response = await fetch('http://localhost:11434/api/tags', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        modelSelector.innerHTML = data.models
+          .map(model => `<option value="${model.name}">${model.name}</option>`)
+          .join('');
+      } catch (error) {
+        console.error('Error loading models:', error);
+        modelSelector.innerHTML = '<option value="mistral">mistral</option>';
+      }
+    }
+
+    function addMessage(text, isUser) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+      messageDiv.textContent = text;
+      messagesDiv.appendChild(messageDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const message = userInput.value.trim();
+      const selectedModel = modelSelector.value || 'mistral';
+      
+      if (!message) return;
+
+      addMessage(message, true);
+      userInput.value = '';
+
+      try {
+        const response = await fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            prompt: message
+          })
+        });
+
+        const reader = response.body.getReader();
+        let botResponse = '';
+
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          
+          const chunk = new TextDecoder().decode(value);
+          const lines = chunk.split('\n');
+          
+          lines.forEach(line => {
+            if (line.trim() !== '') {
+              const json = JSON.parse(line);
+              if (json.response) {
+                botResponse += json.response;
+              }
+            }
+          });
+        }
+
+        addMessage(botResponse, false);
+      } catch (error) {
+        console.error('Error:', error);
+        addMessage('Error: Could not connect to Ollama service', false);
+      }
+    }
+
+    sendButton.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    // Load models when page loads
+    loadModels();
+  </script>
+</body>
+</html>
